@@ -9,6 +9,12 @@ wheels/
 # Virtual environments
 .venv
 
+# Local Claude Code guidance (not shared via repo)
+CLAUDE.md
+
+# macOS
+.DS_Store
+
 # Data (large / regenerable via scripts)
 data/raw_video/*
 data/crops/

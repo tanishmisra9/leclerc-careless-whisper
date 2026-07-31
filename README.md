@@ -1,10 +1,12 @@
 # CarlessWhisper — Charles Leclerc Detection Project
 
 Data-acquisition tooling for a camera-based system that plays "Careless Whisper" whenever
-Charles Leclerc (face, helmet, or car #16) is visible on screen. See
+Charles Leclerc is visible on screen. See
 `/Users/tanishmisra/.claude/plans/here-s-a-handoff-for-keen-ocean.md` for the full handoff
 and current-stage plan. This repo currently covers only data collection — no detection,
 training, or playback logic yet.
+
+v1 scope is face-only (no helmet/car/background categories yet).
 
 ## Setup
 
@@ -22,22 +24,16 @@ uv run scripts/video_parser.py data/raw_video/<clip>.mp4 --fps 1
 
 Crops are written to `data/crops/face/<clip_name>/`.
 
-## Web image crawlers
+## Web image crawler
 
-Pull reference images per category (`face`, `helmet`, `car_positive`, `car_negative`,
-`background_negative`) from icrawler (Google/Bing), duckduckgo_search (`ddgs`), and
-Wikimedia Commons:
+Pulls face reference images via duckduckgo_search (`ddgs`). (icrawler/Google/Bing was dropped —
+mostly irrelevant results, e.g. paintbrushes and historical figures also named Leclerc.
+Wikimedia Commons was dropped too — very low yield for these queries.)
 
 ```
-uv run scripts/crawl_all.py --category face --per-source 100
-uv run scripts/crawl_all.py                          # all categories
+uv run scripts/crawl_all.py --per-source 100
 ```
 
-Or run a single source directly: `crawl_icrawler.py`, `crawl_ddg.py`, `crawl_wikimedia.py`
-(each takes `--category` and a per-source count flag).
+Or run the source directly: `uv run scripts/crawl_ddg.py --category face --max-results 100`.
 
-Output goes to `data/web/<category>/`, deduped across sources.
-
-Note: Wikimedia Commons' API/CDN rate-limits aggressively from shared/datacenter IPs; the
-wikimedia crawler retries with backoff but may need to be run from a normal residential
-connection to get full throughput.
+Output goes to `data/web/face/`, deduped.

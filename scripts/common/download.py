@@ -1,4 +1,4 @@
-"""Shared HTTP image fetch used by crawl_ddg.py and crawl_wikimedia.py."""
+"""Shared HTTP image fetch used by crawl_ddg.py."""
 
 from __future__ import annotations
 

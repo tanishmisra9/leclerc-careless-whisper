@@ -15,7 +15,7 @@ from pathlib import Path
 import cv2
 
 sys.path.insert(0, str(Path(__file__).parent))
-from common.image_filters import DedupTracker, passes_filters
+from common.image_filters import DedupTracker, is_too_blurry, is_too_small
 
 
 def extract_frames(video_path: Path, out_dir: Path, fps: float) -> list[Path]:
@@ -45,7 +45,7 @@ def main():
     parser.add_argument("--fps", type=float, default=1.0)
     parser.add_argument("--out", type=Path, default=Path("data/crops/face"))
     parser.add_argument("--min-size", type=int, default=60)
-    parser.add_argument("--blur-thresh", type=float, default=100.0)
+    parser.add_argument("--blur-thresh", type=float, default=15.0)
     parser.add_argument("--det-thresh", type=float, default=0.6)
     args = parser.parse_args()
 
@@ -64,6 +64,9 @@ def main():
     frames_processed = 0
     faces_found = 0
     faces_kept = 0
+    rejected_small = 0
+    rejected_blurry = 0
+    rejected_duplicate = 0
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
@@ -82,7 +85,14 @@ def main():
                 crop = crop_with_margin(img, face.bbox)
                 if crop.size == 0:
                     continue
-                if not passes_filters(crop, dedup, args.min_size, args.blur_thresh):
+                if is_too_small(crop, args.min_size):
+                    rejected_small += 1
+                    continue
+                if is_too_blurry(crop, args.blur_thresh):
+                    rejected_blurry += 1
+                    continue
+                if dedup.is_duplicate(crop):
+                    rejected_duplicate += 1
                     continue
                 out_path = out_dir / f"{frame_path.stem}_face_{i}.png"
                 cv2.imwrite(str(out_path), crop)
@@ -91,6 +101,10 @@ def main():
     print(
         f"{args.video.name}: {frames_processed} frames processed, "
         f"{faces_found} faces detected, {faces_kept} crops kept -> {out_dir}"
+    )
+    print(
+        f"  rejected: {rejected_small} too small, {rejected_blurry} too blurry, "
+        f"{rejected_duplicate} near-duplicate"
     )
 
 
