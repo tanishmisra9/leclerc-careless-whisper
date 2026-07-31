@@ -1,0 +1,16 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Data (large / regenerable via scripts)
+data/raw_video/*
+data/crops/
+data/web/
+!data/raw_video/.gitkeep
