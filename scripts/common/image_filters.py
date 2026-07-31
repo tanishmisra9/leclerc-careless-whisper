@@ -1,4 +1,4 @@
-"""Shared image quality filtering and dedup, used by video_parser.py."""
+"""Shared image quality filtering and dedup, used by video_parser.py and crawl_ddg.py."""
 
 from __future__ import annotations
 
@@ -37,3 +37,19 @@ class DedupTracker:
         if len(self._hashes) > self.window:
             self._hashes.pop(0)
         return False
+
+
+def passes_filters(
+    img: np.ndarray,
+    dedup: DedupTracker,
+    min_size: int = 60,
+    blur_thresh: float = 100.0,
+) -> bool:
+    """Returns True if img should be kept: big enough, sharp enough, not a near-duplicate."""
+    if is_too_small(img, min_size):
+        return False
+    if is_too_blurry(img, blur_thresh):
+        return False
+    if dedup.is_duplicate(img):
+        return False
+    return True

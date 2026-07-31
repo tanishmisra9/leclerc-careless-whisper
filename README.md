@@ -4,7 +4,8 @@ A camera-based system that plays "Careless Whisper" whenever Charles Leclerc is 
 screen. See `/Users/tanishmisra/.claude/plans/here-s-a-handoff-for-keen-ocean.md` for the full
 handoff and current-stage plan.
 
-v1 scope is face-only, built entirely from Tanish's own footage (no web crawling).
+v1 scope is face-only, primarily Tanish's own footage plus a small set of web images pulled for
+lighting/angle diversity that one video can't supply.
 
 ## Setup
 
@@ -22,15 +23,26 @@ uv run scripts/video_parser.py data/raw_video/<clip>.mp4 --fps 1
 
 Crops are written to `data/crops/face/<clip_name>/`.
 
+## Diversity image crawl (optional)
+
+Pulls extra reference images targeting lighting and angle diversity the video alone lacks (night
+races, rain, side profiles, etc.):
+
+```
+uv run scripts/crawl_ddg.py --max-results 40
+```
+
+Writes to `data/web/face/`.
+
 ## Enroll reference faces
 
-Builds a reference embedding set from the video crops, for live matching:
+Builds a reference embedding set from the video crops (and web images, if crawled):
 
 ```
 uv run scripts/enroll_faces.py
 ```
 
-Writes `data/leclerc_embeddings.npy`. Takes about a minute for ~1,000 crops.
+Writes `data/leclerc_embeddings.npy`. Takes roughly a minute per ~1,000 images.
 
 ## Live trigger
 

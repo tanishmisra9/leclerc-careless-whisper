@@ -2,6 +2,7 @@
 
 Usage:
     uv run scripts/enroll_faces.py
+    uv run scripts/enroll_faces.py --crops-dir data/crops/face/charles data/web/face
 """
 
 from __future__ import annotations
@@ -21,6 +22,8 @@ PAD_FRACTION = 0.5
 # centroid, with one contaminant (a bystander's face) at 0.01. 0.3 splits them with margin.
 OUTLIER_THRESH = 0.3
 
+IMAGE_EXTENSIONS = ("*.png", "*.jpg", "*.jpeg")
+
 
 def pad(img: np.ndarray, fraction: float = PAD_FRACTION) -> np.ndarray:
     h, w = img.shape[:2]
@@ -28,26 +31,44 @@ def pad(img: np.ndarray, fraction: float = PAD_FRACTION) -> np.ndarray:
     return cv2.copyMakeBorder(img, dy, dy, dx, dx, cv2.BORDER_REPLICATE)
 
 
+def collect_image_paths(dirs: list[Path]) -> list[Path]:
+    paths = []
+    for d in dirs:
+        if not d.is_dir():
+            print(f"  (skipping {d}: not a directory)")
+            continue
+        for pattern in IMAGE_EXTENSIONS:
+            paths.extend(d.glob(pattern))
+    return sorted(paths)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--crops-dir", type=Path, default=Path("data/crops/face/charles"))
+    parser.add_argument(
+        "--crops-dir",
+        type=Path,
+        nargs="+",
+        default=[Path("data/crops/face/charles"), Path("data/web/face")],
+    )
     parser.add_argument("--out", type=Path, default=Path("data/leclerc_embeddings.npy"))
     args = parser.parse_args()
 
-    if not args.crops_dir.is_dir():
-        sys.exit(f"Crops directory not found: {args.crops_dir}")
-
-    crop_paths = sorted(args.crops_dir.glob("*.png"))
+    crop_paths = collect_image_paths(args.crops_dir)
     if not crop_paths:
-        sys.exit(f"No .png crops found in {args.crops_dir}")
+        sys.exit(f"No images found in {args.crops_dir}")
 
     from insightface.app import FaceAnalysis
 
     app = FaceAnalysis(allowed_modules=["detection", "recognition"], providers=["CPUExecutionProvider"])
     app.prepare(ctx_id=-1, det_size=(640, 640))
 
-    embeddings = []
-    names = []
+    # Pass 1: single-face images are unambiguous (the one face present is the subject) and
+    # build a trusted centroid. Multi-face images are deferred — 26% of the web crawl has 2+
+    # people in frame (measured), and "highest detection confidence" is not a reliable proxy
+    # for "is Leclerc" once other people are in the shot.
+    trusted_embeddings = []
+    trusted_names = []
+    ambiguous = []  # (path, [face embeddings]) for images with 2+ faces
     no_detect = 0
 
     for crop_path in crop_paths:
@@ -59,12 +80,30 @@ def main():
         if not faces:
             no_detect += 1
             continue
-        best = max(faces, key=lambda f: f.det_score)
-        embeddings.append(best.normed_embedding)
-        names.append(crop_path.name)
+        if len(faces) == 1:
+            trusted_embeddings.append(faces[0].normed_embedding)
+            trusted_names.append(crop_path.name)
+        else:
+            ambiguous.append((crop_path.name, [f.normed_embedding for f in faces]))
 
-    if not embeddings:
-        sys.exit("No faces detected in any crop after padding — nothing to enroll.")
+    if not trusted_embeddings:
+        sys.exit("No single-face images found — nothing to build a trusted centroid from.")
+
+    trusted_centroid = np.stack(trusted_embeddings).astype(np.float32).mean(axis=0)
+    trusted_centroid /= np.linalg.norm(trusted_centroid)
+
+    # Pass 2: for each multi-face image, pick whichever face is closest to the trusted
+    # centroid, instead of highest detection confidence.
+    resolved_embeddings = []
+    resolved_names = []
+    for name, face_embeddings in ambiguous:
+        sims_to_trusted = np.stack(face_embeddings) @ trusted_centroid
+        best_idx = int(np.argmax(sims_to_trusted))
+        resolved_embeddings.append(face_embeddings[best_idx])
+        resolved_names.append(name)
+
+    embeddings = trusted_embeddings + resolved_embeddings
+    names = trusted_names + resolved_names
 
     all_embeddings = np.stack(embeddings).astype(np.float32)
     centroid = all_embeddings.mean(axis=0)
@@ -83,7 +122,8 @@ def main():
     np.save(args.out, kept)
 
     print(
-        f"crops={len(crop_paths)} embedded={len(embeddings)} no_detect={no_detect} "
+        f"crops={len(crop_paths)} single_face={len(trusted_embeddings)} "
+        f"multi_face_resolved={len(resolved_embeddings)} no_detect={no_detect} "
         f"dropped={len(dropped)} kept={len(kept)} -> {args.out}"
     )
 
