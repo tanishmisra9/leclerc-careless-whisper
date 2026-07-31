@@ -70,9 +70,12 @@ Watches the camera and plays `careless-whisper.m4a` from the top whenever a matc
 screen, stopping a few frames after it leaves:
 
 ```
-uv run scripts/carless_whisper.py [--camera 0] [--threshold 0.4] [--max-misses 3]
-                                   [--capture-width 1920] [--capture-height 1080]
+uv run whisper [--camera 0] [--threshold 0.4] [--max-misses 3]
+               [--capture-width 1920] [--capture-height 1080]
 ```
+
+(`uv run scripts/carless_whisper.py` still works too — `whisper` is a shortcut registered via
+`[project.scripts]` in `pyproject.toml`, not a replacement.)
 
 Requires `data/leclerc_embeddings.npy` (run enrollment first) and `careless-whisper.m4a` in the
 repo root. Press `q` or Esc to quit.
