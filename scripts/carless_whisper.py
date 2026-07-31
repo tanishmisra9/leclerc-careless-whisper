@@ -3,8 +3,19 @@
 Usage:
     uv run scripts/carless_whisper.py [--camera 0] [--threshold 0.4] [--max-misses 3]
                                        [--capture-width 1920] [--capture-height 1080]
+                                       [--rotate 0|90|180|270] [--no-auto-rotate]
 
 Requires data/leclerc_embeddings.npy (run scripts/enroll_faces.py first).
+
+cv2.VideoCapture reads the raw sensor buffer and ignores device-orientation metadata, so a phone
+held in portrait (e.g. via Continuity Camera) still delivers landscape frames -- OpenCV has no way
+to read the phone's physical orientation directly (that's a native-AVFoundation-only API). Instead,
+--rotate sets the starting guess, and by default the script auto-corrects using the face detector
+itself as the "which way is up" signal: after a stretch of frames with no face detected at all, it
+tries the other three rotations of the raw frame and switches if one of them finds a face. This
+reacts when detection lapses, not the instant the phone physically turns -- pass --no-auto-rotate
+to disable it and rely on a fixed --rotate value instead.
+
 Press q or Esc to quit.
 """
 
@@ -22,6 +33,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DET_WIDTH = 640  # detection always runs on a downscaled copy at this width, independent of display size
+
+# Consecutive no-face-at-all frames before probing alternate rotations. Long enough that a normal
+# brief look-away or occlusion doesn't trigger 3 extra detection passes; short enough to feel
+# responsive for a demo (roughly 1-1.5s at the fps this pipeline typically runs at).
+REORIENT_AFTER_MISSES = 15
 
 # Palette (RGB). Deliberately not default red/green: amber reads as "active/confident" for a
 # match rather than alarm-adjacent, coral is a softer/informational below-threshold signal.
@@ -164,6 +180,29 @@ class Hud:
         return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
 
+_ROTATIONS = {
+    0: None,
+    90: cv2.ROTATE_90_CLOCKWISE,
+    180: cv2.ROTATE_180,
+    270: cv2.ROTATE_90_COUNTERCLOCKWISE,
+}
+
+
+def rotate_frame(frame: np.ndarray, degrees: int) -> np.ndarray:
+    code = _ROTATIONS[degrees]
+    return frame if code is None else cv2.rotate(frame, code)
+
+
+def detect_faces(app, frame: np.ndarray) -> tuple[list, float]:
+    """Runs detection on a downscaled copy of frame. Returns (faces, det_scale) where det_scale
+    maps a detection-space coordinate back to frame-space (multiply by it)."""
+    h, w = frame.shape[:2]
+    det_scale = w / DET_WIDTH
+    det_h = int(h / det_scale)
+    small = cv2.resize(frame, (DET_WIDTH, det_h))
+    return app.get(small), det_scale
+
+
 def open_camera(index: int, want_w: int, want_h: int) -> tuple[cv2.VideoCapture, np.ndarray]:
     cap = cv2.VideoCapture(index)
     if not cap.isOpened():
@@ -185,6 +224,10 @@ def main():
     parser.add_argument("--max-misses", type=int, default=3)
     parser.add_argument("--capture-width", type=int, default=1920)
     parser.add_argument("--capture-height", type=int, default=1080)
+    parser.add_argument("--rotate", type=int, choices=[0, 90, 180, 270], default=0,
+                         help="starting rotation guess; auto-adjusts from here unless --no-auto-rotate")
+    parser.add_argument("--no-auto-rotate", action="store_false", dest="auto_rotate", default=True,
+                         help="disable automatic re-orientation when no face is found for a while")
     args = parser.parse_args()
 
     ref_path = REPO_ROOT / "data" / "leclerc_embeddings.npy"
@@ -204,29 +247,53 @@ def main():
     app = FaceAnalysis(allowed_modules=["detection", "recognition"], providers=["CPUExecutionProvider"])
     app.prepare(ctx_id=-1, det_size=(DET_WIDTH, DET_WIDTH))
 
-    cap, first_frame = open_camera(args.camera, args.capture_width, args.capture_height)
-    display_h, display_w = first_frame.shape[:2]
-    hud = Hud(display_w, display_h)
+    cap, first_raw = open_camera(args.camera, args.capture_width, args.capture_height)
+    current_rotation = args.rotate
+
+    def build_display(raw: np.ndarray) -> tuple[np.ndarray, int, int, Hud]:
+        rotated = rotate_frame(raw, current_rotation)
+        h, w = rotated.shape[:2]
+        return rotated, w, h, Hud(w, h)
+
+    frame, display_w, display_h, hud = build_display(first_raw)
+    if current_rotation:
+        print(f"Rotation: {current_rotation}° -> display {display_w}x{display_h}")
 
     audio = AudioPlayer(audio_path)
     present = False
     misses = 0
+    no_face_streak = 0
     prev_time = time.time()
-    frame: np.ndarray | None = first_frame
+    raw_frame: np.ndarray | None = first_raw
 
     try:
         while True:
-            if frame is None:
-                ret, frame = cap.read()
+            if raw_frame is None:
+                ret, raw_frame = cap.read()
                 if not ret:
                     print("Camera read failed, stopping.")
                     break
+                frame = rotate_frame(raw_frame, current_rotation)
 
-            det_scale = display_w / DET_WIDTH
-            det_h = int(display_h / det_scale)
-            small = cv2.resize(frame, (DET_WIDTH, det_h))
+            faces_raw, det_scale = detect_faces(app, frame)
 
-            faces_raw = app.get(small)
+            if not faces_raw and args.auto_rotate:
+                no_face_streak += 1
+                if no_face_streak >= REORIENT_AFTER_MISSES:
+                    for delta in (90, 180, 270):
+                        trial_rotation = (current_rotation + delta) % 360
+                        trial_frame = rotate_frame(raw_frame, trial_rotation)
+                        trial_faces, trial_scale = detect_faces(app, trial_frame)
+                        if trial_faces:
+                            current_rotation = trial_rotation
+                            frame, display_w, display_h, hud = build_display(raw_frame)
+                            faces_raw, det_scale = trial_faces, trial_scale
+                            print(f"Rotation: switched to {current_rotation}° -> display {display_w}x{display_h} (face found)")
+                            break
+                    no_face_streak = 0
+            else:
+                no_face_streak = 0
+
             scored_faces: list[tuple[int, int, int, int, float]] = []
             for face in faces_raw:
                 score = float((refs @ face.normed_embedding).max())
@@ -261,7 +328,7 @@ def main():
             if key in (ord("q"), 27):
                 break
 
-            frame = None
+            raw_frame = None
     finally:
         audio.stop()
         cap.release()
