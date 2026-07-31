@@ -20,3 +20,6 @@ data/raw_video/*
 data/crops/
 data/*.npy
 !data/raw_video/.gitkeep
+
+# Copyrighted audio clip — not for the public repo
+/careless-whisper.m4a
