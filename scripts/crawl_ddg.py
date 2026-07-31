@@ -1,9 +1,10 @@
 """Download Leclerc reference images via duckduckgo_search (no API key required), targeting
-lighting and profile-angle diversity that a single interview video can't supply.
+lighting, profile-angle, and helmet-on diversity that a single interview video can't supply.
 
 Usage:
     uv run scripts/crawl_ddg.py --max-results 40
     uv run scripts/crawl_ddg.py --profile-only --max-results 60
+    uv run scripts/crawl_ddg.py --helmet --max-results 60
 """
 
 from __future__ import annotations
@@ -42,6 +43,24 @@ OTHER_QUERIES = [
     "Charles Leclerc sunset",
     "Charles Leclerc overcast",
     "Charles Leclerc indoor press conference",
+]
+
+# Out-of-car helmet-on shots specifically (grid walk, paddock, portraits) -- explicitly avoiding
+# onboard/cockpit framing, which is a different (excluded) context. These get fed into the same
+# face-embedding pipeline as everything else: enroll_faces.py only keeps images where InsightFace
+# still finds a face (visor up / partially visible), which a verified sample showed is possible
+# even with the helmet on (ddg_00165.jpg: det_score 0.75, scored 0.324 against the pre-helmet
+# reference set -- just under the 0.4 live threshold, hence this crawl).
+HELMET_QUERIES = [
+    "Charles Leclerc helmet grid walk",
+    "Charles Leclerc helmet pit lane",
+    "Charles Leclerc putting on helmet",
+    "Charles Leclerc helmet walking",
+    "Charles Leclerc helmet portrait",
+    "Charles Leclerc helmet visor up",
+    "Charles Leclerc helmet profile",
+    "Charles Leclerc pre race helmet",
+    "Charles Leclerc helmet paddock",
 ]
 
 QUERIES = OTHER_QUERIES + PROFILE_QUERIES
@@ -94,16 +113,25 @@ def run(
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--max-results", type=int, default=40, help="max image results per query")
-    parser.add_argument("--out", type=Path, default=Path("data/web/face"))
-    parser.add_argument(
+    parser.add_argument("--out", type=Path, default=None, help="default: data/web/face, or data/web/helmet with --helmet")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--profile-only", action="store_true", help="only run the profile-angle-targeted queries"
     )
+    mode.add_argument("--helmet", action="store_true", help="only run the helmet-on queries")
     args = parser.parse_args()
 
-    queries = PROFILE_QUERIES if args.profile_only else QUERIES
-    kept = run(queries, max_results=args.max_results, out_dir=args.out)
-    removed = dedup_directory(args.out)
-    print(f"[ddg] kept {kept} new images, removed {removed} cross-run duplicates -> {args.out}")
+    if args.helmet:
+        queries, default_out = HELMET_QUERIES, Path("data/web/helmet")
+    elif args.profile_only:
+        queries, default_out = PROFILE_QUERIES, Path("data/web/face")
+    else:
+        queries, default_out = QUERIES, Path("data/web/face")
+    out_dir = args.out if args.out is not None else default_out
+
+    kept = run(queries, max_results=args.max_results, out_dir=out_dir)
+    removed = dedup_directory(out_dir)
+    print(f"[ddg] kept {kept} new images, removed {removed} cross-run duplicates -> {out_dir}")
 
 
 if __name__ == "__main__":

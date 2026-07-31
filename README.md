@@ -31,9 +31,11 @@ races, rain, side profiles, etc.):
 ```
 uv run scripts/crawl_ddg.py --max-results 40
 uv run scripts/crawl_ddg.py --profile-only --max-results 60   # just the profile-angle queries
+uv run scripts/crawl_ddg.py --helmet --max-results 50         # out-of-car, helmet-on shots
 ```
 
-Writes to `data/web/face/`, deduped against everything already there (safe to re-run).
+Writes to `data/web/face/` (or `data/web/helmet/` with `--helmet`), deduped against everything
+already there (safe to re-run).
 
 ## Measure pose diversity
 
@@ -46,13 +48,21 @@ uv run scripts/measure_pose_diversity.py data/web/face
 
 ## Enroll reference faces
 
-Builds a reference embedding set from the video crops (and web images, if crawled):
+Builds a reference embedding set from the video crops and web images (including helmet-on shots,
+if crawled — see below for why those need special handling):
 
 ```
 uv run scripts/enroll_faces.py
 ```
 
 Writes `data/leclerc_embeddings.npy`. Takes roughly a minute per ~1,000 images.
+
+**Helmet-on images use a lower outlier threshold than clean faces** (0.1 vs 0.3, both in
+`scripts/enroll_faces.py`). A visor genuinely lowers similarity-to-centroid regardless of identity
+— the same threshold tuned for unoccluded faces was silently rejecting real helmet-on Leclerc
+shots. This only covers helmet-on with the face at least partially visible (visor up or an eye
+visible through it); fully visor-down/no-face-visible shots aren't reachable by this face-embedding
+pipeline at all — see the known-limitation note in `CLAUDE.md`.
 
 ## Live trigger
 
