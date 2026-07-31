@@ -30,9 +30,19 @@ races, rain, side profiles, etc.):
 
 ```
 uv run scripts/crawl_ddg.py --max-results 40
+uv run scripts/crawl_ddg.py --profile-only --max-results 60   # just the profile-angle queries
 ```
 
-Writes to `data/web/face/`.
+Writes to `data/web/face/`, deduped against everything already there (safe to re-run).
+
+## Measure pose diversity
+
+Checks how much of a face-image folder actually sits at off-axis head angles (yaw), rather than
+trusting that a "side profile" search query returned side profiles:
+
+```
+uv run scripts/measure_pose_diversity.py data/web/face
+```
 
 ## Enroll reference faces
 

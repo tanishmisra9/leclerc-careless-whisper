@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import cv2
 import imagehash
 import numpy as np
@@ -53,3 +55,22 @@ def passes_filters(
     if dedup.is_duplicate(img):
         return False
     return True
+
+
+def dedup_directory(dir_path: Path, hamming_thresh: int = 5) -> int:
+    """Removes near-duplicate images within a directory (unbounded window), across all files.
+
+    Used after crawl_ddg.py runs, since each run's own DedupTracker only sees that run's
+    downloads — re-running the crawler with new queries doesn't dedup against prior results.
+    Returns the number of files removed.
+    """
+    dedup = DedupTracker(hamming_thresh=hamming_thresh, window=10_000)
+    removed = 0
+    for f in sorted(dir_path.iterdir()):
+        img = cv2.imread(str(f))
+        if img is None:
+            continue
+        if dedup.is_duplicate(img):
+            f.unlink()
+            removed += 1
+    return removed
