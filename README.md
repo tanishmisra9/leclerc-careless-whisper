@@ -72,7 +72,6 @@ screen, stopping a few frames after it leaves:
 ```
 uv run whisper [--camera 0] [--threshold 0.4] [--max-misses 3]
                [--capture-width 1920] [--capture-height 1080]
-               [--rotate 0|90|180|270] [--no-auto-rotate]
 ```
 
 (`uv run scripts/carless_whisper.py` still works too — `whisper` is a shortcut registered via
@@ -86,10 +85,3 @@ The window shows the camera at its actual negotiated resolution (printed at star
 an internal 640px-wide copy for speed, with boxes scaled back up. The bottom bar shows live state
 (LISTENING/PLAYING), the best match score, threshold, and fps — use the score to tune
 `--threshold` against your own footage.
-
-**Portrait phones / sideways preview:** `cv2.VideoCapture` reads the raw camera sensor buffer and
-has no way to read a phone's physical orientation, so a portrait-held phone can still deliver a
-landscape frame. By default the script auto-corrects: if no face is found for ~1-1.5s, it tries
-the other three rotations and switches to whichever one finds a face (printed when it happens).
-This reacts to a detection lapse, not the instant you physically turn the phone. Use `--rotate` to
-set the starting orientation, or `--no-auto-rotate` to disable auto-correction and stay fixed.
