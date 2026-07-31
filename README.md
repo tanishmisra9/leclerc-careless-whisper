@@ -71,8 +71,14 @@ screen, stopping a few frames after it leaves:
 
 ```
 uv run scripts/carless_whisper.py [--camera 0] [--threshold 0.4] [--max-misses 3]
+                                   [--capture-width 1920] [--capture-height 1080]
 ```
 
 Requires `data/leclerc_embeddings.npy` (run enrollment first) and `careless-whisper.m4a` in the
-repo root. Press `q` or Esc to quit. The overlay shows a live similarity score per detected
-face — use it to tune `--threshold` against your own footage.
+repo root. Press `q` or Esc to quit.
+
+The window shows the camera at its actual negotiated resolution (printed at startup — e.g.
+`Camera: requested 1920x1080, got 1920x1080`), not a downscaled preview; detection still runs on
+an internal 640px-wide copy for speed, with boxes scaled back up. The bottom bar shows live state
+(LISTENING/PLAYING), the best match score, threshold, and fps — use the score to tune
+`--threshold` against your own footage.
