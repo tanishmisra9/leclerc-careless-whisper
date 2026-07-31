@@ -15,12 +15,9 @@ CLAUDE.md
 # macOS
 .DS_Store
 
-# Data (large / regenerable via scripts)
-data/raw_video/*
-data/crops/
+# Data not tracked in the repo
+data/raw_video/
 data/web/
-data/*.npy
-!data/raw_video/.gitkeep
 
 # Copyrighted audio clip — not for the public repo
 /careless-whisper.m4a
