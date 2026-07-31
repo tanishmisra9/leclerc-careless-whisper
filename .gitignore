@@ -18,5 +18,5 @@ CLAUDE.md
 # Data (large / regenerable via scripts)
 data/raw_video/*
 data/crops/
-data/web/
+data/*.npy
 !data/raw_video/.gitkeep

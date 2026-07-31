@@ -1,8 +1,6 @@
-"""Shared image quality filtering and dedup, used by video_parser.py and the crawl_*.py scripts."""
+"""Shared image quality filtering and dedup, used by video_parser.py."""
 
 from __future__ import annotations
-
-from pathlib import Path
 
 import cv2
 import imagehash
@@ -39,38 +37,3 @@ class DedupTracker:
         if len(self._hashes) > self.window:
             self._hashes.pop(0)
         return False
-
-
-def passes_filters(
-    img: np.ndarray,
-    dedup: DedupTracker,
-    min_size: int = 60,
-    blur_thresh: float = 100.0,
-) -> bool:
-    """Returns True if img should be kept: big enough, sharp enough, not a near-duplicate."""
-    if is_too_small(img, min_size):
-        return False
-    if is_too_blurry(img, blur_thresh):
-        return False
-    if dedup.is_duplicate(img):
-        return False
-    return True
-
-
-def dedup_directory(dir_path: Path, hamming_thresh: int = 5) -> int:
-    """Removes near-duplicate images within a directory (unbounded window), across all files.
-
-    Used by crawl_all.py after combining output from multiple sources into one category
-    folder, since each source's own DedupTracker only sees its own downloads.
-    Returns the number of files removed.
-    """
-    dedup = DedupTracker(hamming_thresh=hamming_thresh, window=10_000)
-    removed = 0
-    for f in sorted(dir_path.iterdir()):
-        img = cv2.imread(str(f))
-        if img is None:
-            continue
-        if dedup.is_duplicate(img):
-            f.unlink()
-            removed += 1
-    return removed
