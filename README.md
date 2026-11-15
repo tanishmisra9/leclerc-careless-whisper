@@ -1,4 +1,6 @@
-# CarlessWhisper
+# Leclerc Careless Whisper
+
+![License: MIT](https://img.shields.io/badge/license-MIT-blue) ![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
 
 *Romanticizing Charles Leclerc*
 
