@@ -18,6 +18,7 @@ CLAUDE.md
 # Data not tracked in the repo
 data/raw_video/
 data/web/
+data/crops/
 
 # Copyrighted audio clip — not for the public repo
 /careless-whisper.m4a

@@ -31,7 +31,7 @@ uv sync
 uv run scripts/video_parser.py <path-to-video.mp4> --fps 1
 ```
 
-Crops are written to `data/crops/face/<clip_name>/`.
+Crops are written to `data/crops/face/<clip_name>/` (not tracked in this repo, see `.gitignore`).
 
 ### 2. Crawl extra reference images (optional)
 
